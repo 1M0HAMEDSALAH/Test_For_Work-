@@ -3,18 +3,23 @@ import 'package:flutter/material.dart';
 class AnimatedLoginButton extends StatefulWidget {
   final Future<void> Function() onLogin;
   final String text;
+  final Color? successColor;
+  final Color? failureColor;
 
   const AnimatedLoginButton({
-    Key? key, 
-    required this.onLogin, 
+    Key? key,
+    required this.onLogin,
     this.text = 'Log In',
+    this.successColor,
+    this.failureColor,
   }) : super(key: key);
 
   @override
   _AnimatedLoginButtonState createState() => _AnimatedLoginButtonState();
 }
 
-class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTickerProviderStateMixin {
+class _AnimatedLoginButtonState extends State<AnimatedLoginButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _widthAnimation;
   late Animation<double> _opacityAnimation;
@@ -23,7 +28,7 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
   @override
   void initState() {
     super.initState();
-    
+
     // Animation controller for button transformations
     _controller = AnimationController(
       duration: const Duration(milliseconds: 500),
@@ -32,8 +37,8 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
 
     // Width animation to minimize the button
     _widthAnimation = Tween<double>(
-      begin: 250.0,  // Initial width
-      end: 50.0,     // Minimized width
+      begin: 250.0, // Initial width
+      end: 50.0, // Minimized width
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
@@ -50,6 +55,9 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
   }
 
   Future<void> _onLoginPressed() async {
+    // Prevent multiple taps
+    if (_currentState != LoginState.initial) return;
+
     // Change state to loading
     setState(() {
       _currentState = LoginState.loading;
@@ -68,16 +76,22 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
       });
 
       // Optional: Delay and then reset or navigate
-      await Future.delayed(Duration(seconds: 1));
+      await Future.delayed(const Duration(seconds: 2));
       _resetButton();
     } catch (e) {
-      // If login fails, reset button
-      _resetButton();
-      
+      // If login fails, change to failure state
+      setState(() {
+        _currentState = LoginState.failure;
+      });
+
       // Show error to user
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
       );
+
+      // Reset after showing failure
+      await Future.delayed(const Duration(seconds: 2));
+      _resetButton();
     }
   }
 
@@ -89,28 +103,41 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
     });
   }
 
+  Color _getButtonColor() {
+    switch (_currentState) {
+      case LoginState.initial:
+        return Colors.blue.shade700;
+      case LoginState.loading:
+        return Colors.blue.shade800;
+      case LoginState.success:
+        return widget.successColor ?? Colors.green.shade600;
+      case LoginState.failure:
+        return widget.failureColor ?? Colors.red.shade600;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return GestureDetector(
-          onTap: _currentState == LoginState.initial ? _onLoginPressed : null,
+          onTap: _onLoginPressed,
           child: Container(
             width: _widthAnimation.value,
             height: 50,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.blue.shade600,
-                  Colors.blue.shade800,
+                  _getButtonColor(),
+                  _getButtonColor().withOpacity(0.8),
                 ],
               ),
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black26,
-                  offset: Offset(0, 4),
+                  offset: const Offset(0, 4),
                   blurRadius: 5.0,
                 )
               ],
@@ -123,7 +150,7 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
                   opacity: _opacityAnimation.value,
                   child: Text(
                     widget.text,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -133,7 +160,7 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
 
                 // Loading indicator (only visible during loading)
                 if (_currentState == LoginState.loading)
-                  SizedBox(
+                  const SizedBox(
                     width: 25,
                     height: 25,
                     child: CircularProgressIndicator(
@@ -142,10 +169,18 @@ class _AnimatedLoginButtonState extends State<AnimatedLoginButton> with SingleTi
                     ),
                   ),
 
-                // Success checkmark (optional)
+                // Success checkmark
                 if (_currentState == LoginState.success)
-                  Icon(
-                    Icons.check,
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+
+                // Failure cross
+                if (_currentState == LoginState.failure)
+                  const Icon(
+                    Icons.error_outline,
                     color: Colors.white,
                     size: 30,
                   ),
@@ -169,24 +204,45 @@ enum LoginState {
   initial,
   loading,
   success,
+  failure,
 }
 
-// Example usage
+// Example usage with different login scenarios
 class LoginScreen extends StatelessWidget {
-  Future<void> _performLogin() async {
-    // Simulate network delay
-    await Future.delayed(Duration(seconds: 5));
-    // Add your actual login logic here
-    // Throw an exception to test error handling if needed
+  // Successful login simulation
+  Future<void> _performSuccessfulLogin() async {
+    await Future.delayed(const Duration(seconds: 2));
+    // Simulating successful login
+  }
+
+  // Failed login simulation
+  Future<void> _performFailedLogin() async {
+    await Future.delayed(const Duration(seconds: 2));
+    // Simulating login failure
+    throw Exception('Invalid credentials');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: AnimatedLoginButton(
-          onLogin: _performLogin,
-          text: 'Log In',
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Successful login button
+            AnimatedLoginButton(
+              onLogin: _performSuccessfulLogin,
+              text: 'Sucsses',
+              successColor: Colors.green.shade600,
+            ),
+            const SizedBox(height: 20),
+            // Failed login button
+            AnimatedLoginButton(
+              onLogin: _performFailedLogin,
+              text: 'Error',
+              failureColor: Colors.red.shade600,
+            ),
+          ],
         ),
       ),
     );
